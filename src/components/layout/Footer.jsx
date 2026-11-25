@@ -81,7 +81,7 @@ export const Footer = () => {
               </span>
             </Link>
             <p className="text-xs text-sage-soft/80 leading-relaxed max-w-sm mb-6 font-light">
-              A contemporary quiet luxury atelier curating architectural streetwear and precision Swiss-inspired horology.
+              A contemporary quiet luxury atelier curating handcrafted Pakistani festive lawn collections and precision Swiss horology.
             </p>
             <div className="flex items-center space-x-3 text-sage-soft">
               <a
@@ -120,7 +120,7 @@ export const Footer = () => {
             <ul className="space-y-2.5 text-xs text-sage-soft/80">
               <li>
                 <Link href="/category/clothes" className="hover:text-white transition-colors">
-                  Clothes (Hoodies & Outerwear)
+                  Designer Clothes (Festive Lawn)
                 </Link>
               </li>
               <li>
@@ -130,7 +130,7 @@ export const Footer = () => {
               </li>
               <li>
                 <Link href="/shop" className="hover:text-white transition-colors">
-                  Full 2026 Archive
+                  All Collections
                 </Link>
               </li>
             </ul>
@@ -150,11 +150,6 @@ export const Footer = () => {
               <li>
                 <Link href="/checkout" className="hover:text-white transition-colors">
                   Cash on Delivery Info
-                </Link>
-              </li>
-              <li>
-                <Link href="/about" className="hover:text-white transition-colors">
-                  Heritage & Philosophy
                 </Link>
               </li>
               <li>

@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/mongodb/mongoose';
 import Product from '@/models/Product';
 import Category from '@/models/Category';
 import { getSession } from '@/lib/auth/jwt';
+import { FALLBACK_PRODUCTS } from '@/lib/fallback-data';
 export async function GET(req) {
     try {
         await connectDB();
@@ -74,8 +75,16 @@ export async function GET(req) {
         });
     }
     catch (error) {
-        console.error('Error fetching products:', error);
-        return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 });
+        console.error('Error fetching products from DB, returning fallback:', error.message);
+        return NextResponse.json({
+            products: FALLBACK_PRODUCTS,
+            pagination: {
+                total: FALLBACK_PRODUCTS.length,
+                page: 1,
+                limit: FALLBACK_PRODUCTS.length,
+                pages: 1,
+            },
+        });
     }
 }
 export async function POST(req) {

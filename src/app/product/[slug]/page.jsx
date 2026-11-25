@@ -4,28 +4,42 @@ import { connectDB } from '@/lib/mongodb/mongoose';
 import Product from '@/models/Product';
 import Review from '@/models/Review';
 import ProductDetailView from '@/components/products/ProductDetailView';
+import {
+  FALLBACK_PRODUCTS,
+  getFallbackProductBySlug,
+} from '@/lib/fallback-data';
 
 export const dynamic = 'force-dynamic';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 export async function generateMetadata({ params }) {
-  await connectDB();
   const { slug } = await params;
-  const product = await Product.findOne({ slug }).lean();
+  let product = null;
 
-  if (!product) {
-    return { title: 'Formulation Not Found' };
+  try {
+    await connectDB();
+    product = await Product.findOne({ slug }).lean();
+  } catch (err) {
+    // fallback below
   }
 
-  const title = `${product.name} | Botanical Luxury`;
+  if (!product) {
+    product = getFallbackProductBySlug(slug);
+  }
+
+  if (!product) {
+    return { title: 'Product Not Found | Vogue Atelier' };
+  }
+
+  const title = `${product.name} | Vogue Atelier`;
   const description =
     product.shortDescription ||
-    `Discover ${product.name} crafted with alpine botanicals. Available with Cash on Delivery across Pakistan.`;
+    `Discover ${product.name}. Available with Cash on Delivery across Pakistan.`;
   const image =
     product.images && product.images.length > 0
       ? product.images[0]
-      : '/images/products/serum-main.jpg';
+      : '/images/clothes/hero_clothes_magenta.jpg';
 
   return {
     title,
@@ -57,39 +71,56 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function ProductPage({ params }) {
-  await connectDB();
   const { slug } = await params;
 
-  const productDoc = await Product.findOne({ slug })
-    .populate('category', 'name slug')
-    .lean();
+  let product = null;
+  let relatedProducts = [];
+  let initialReviews = [];
 
-  if (!productDoc) {
+  try {
+    await connectDB();
+    const productDoc = await Product.findOne({ slug })
+      .populate('category', 'name slug')
+      .lean();
+
+    if (productDoc) {
+      product = JSON.parse(JSON.stringify(productDoc));
+
+      const relatedDocs = await Product.find({
+        category: productDoc.category,
+        _id: { $ne: productDoc._id },
+        status: 'published',
+      })
+        .limit(4)
+        .lean();
+      relatedProducts = JSON.parse(JSON.stringify(relatedDocs || []));
+
+      const reviewsDocs = await Review.find({
+        productId: productDoc._id,
+        status: 'approved',
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+      initialReviews = JSON.parse(JSON.stringify(reviewsDocs || []));
+    }
+  } catch (err) {
+    console.error('ProductPage DB fetch error, using fallback:', err.message);
+  }
+
+  // Resilient fallback for live / serverless environments
+  if (!product) {
+    product = getFallbackProductBySlug(slug);
+  }
+
+  if (!product) {
     notFound();
   }
 
-  const product = JSON.parse(JSON.stringify(productDoc));
-
-  // Related products
-  const relatedDocs = await Product.find({
-    category: productDoc.category,
-    _id: { $ne: productDoc._id },
-    status: 'published',
-  })
-    .limit(4)
-    .lean();
-
-  const relatedProducts = JSON.parse(JSON.stringify(relatedDocs));
-
-  // Reviews
-  const reviewsDocs = await Review.find({
-    productId: productDoc._id,
-    status: 'approved',
-  })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const initialReviews = JSON.parse(JSON.stringify(reviewsDocs));
+  if (!relatedProducts || relatedProducts.length === 0) {
+    relatedProducts = FALLBACK_PRODUCTS.filter(
+      (p) => p.slug !== product.slug && p.category?.slug === product.category?.slug
+    ).slice(0, 4);
+  }
 
   // Structured Data (JSON-LD)
   const productJsonLd = {
@@ -101,7 +132,7 @@ export default async function ProductPage({ params }) {
     sku: product.SKU,
     brand: {
       '@type': 'Brand',
-      name: 'SAGE & BOTANICA',
+      name: 'VOGUE ATELIER',
     },
     offers: {
       '@type': 'Offer',
@@ -114,7 +145,7 @@ export default async function ProductPage({ params }) {
         product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       seller: {
         '@type': 'Organization',
-        name: 'SAGE & BOTANICA',
+        name: 'VOGUE ATELIER',
       },
     },
     aggregateRating: {

@@ -64,12 +64,11 @@ export const Header = () => {
       name: 'Collections',
       href: '/shop',
       children: [
-        { name: 'All Luxury Drops', href: '/shop' },
+        { name: 'All Collections', href: '/shop' },
         { name: 'Designer Clothes', href: '/category/clothes' },
         { name: 'Swiss Watches', href: '/category/watches' },
       ],
     },
-    { name: 'About', href: '/about' },
     { name: 'Contact Us', href: '/contact' },
   ];
 
@@ -363,7 +362,7 @@ export const Header = () => {
                     href="/category/clothes"
                     className="block text-base font-medium text-sage-dark hover:text-sage-primary py-1"
                   >
-                    Clothes (Hoodies & Outerwear)
+                    Clothes (Festive Lawn)
                   </Link>
                   <Link
                     href="/category/watches"
@@ -375,13 +374,7 @@ export const Header = () => {
                     href="/shop"
                     className="block text-base font-semibold text-sage-primary py-1"
                   >
-                    Shop All Archive
-                  </Link>
-                  <Link
-                    href="/about"
-                    className="block text-base font-medium text-sage-dark/70 hover:text-sage-dark py-1"
-                  >
-                    About Atelier
+                    All Collections
                   </Link>
                   <Link
                     href="/contact"

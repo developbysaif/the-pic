@@ -9,6 +9,7 @@ import WhyChooseUs from '@/components/home/WhyChooseUs';
 import CustomerReviewsSection from '@/components/home/CustomerReviewsSection';
 import NewsletterSection from '@/components/home/NewsletterSection';
 import InstagramGallery from '@/components/home/InstagramGallery';
+import { FALLBACK_CATEGORIES, FALLBACK_PRODUCTS } from '@/lib/fallback-data';
 
 // Force dynamic so data is always fresh from MongoDB
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,28 @@ async function getHomeData() {
     const products = JSON.parse(JSON.stringify(productsDocs || []));
     const reviews = JSON.parse(JSON.stringify(reviewsDocs || []));
 
-    const featuredProduct = products.find((p) => p.featured) || products[0] || null;
+    const finalCategories = categories.length > 0 ? categories : FALLBACK_CATEGORIES;
+    const finalProducts = products.length > 0 ? products : FALLBACK_PRODUCTS;
+
+    const featuredProduct = finalProducts.find((p) => p.featured) || finalProducts[0] || null;
+    const trendingProducts = finalProducts.filter((p) => p.trending);
+    const bestSellers = finalProducts.filter((p) => p.bestSeller);
+    const specialOffers = finalProducts.filter((p) => p.salePrice && p.salePrice < p.price);
+
+    return {
+      categories: finalCategories,
+      products: finalProducts,
+      featuredProduct,
+      trendingProducts: trendingProducts.length > 0 ? trendingProducts : finalProducts.slice(0, 4),
+      bestSellers: bestSellers.length > 0 ? bestSellers : finalProducts.slice(1, 5),
+      specialOffers: specialOffers.length > 0 ? specialOffers : finalProducts.slice(0, 4),
+      reviews,
+    };
+  } catch (error) {
+    console.error('Error fetching home data from DB, using fallbacks:', error.message);
+    const categories = FALLBACK_CATEGORIES;
+    const products = FALLBACK_PRODUCTS;
+    const featuredProduct = products.find((p) => p.featured) || products[0];
     const trendingProducts = products.filter((p) => p.trending);
     const bestSellers = products.filter((p) => p.bestSeller);
     const specialOffers = products.filter((p) => p.salePrice && p.salePrice < p.price);
@@ -43,17 +65,6 @@ async function getHomeData() {
       trendingProducts: trendingProducts.length > 0 ? trendingProducts : products.slice(0, 4),
       bestSellers: bestSellers.length > 0 ? bestSellers : products.slice(1, 5),
       specialOffers: specialOffers.length > 0 ? specialOffers : products.slice(0, 4),
-      reviews,
-    };
-  } catch (error) {
-    console.error('Error fetching home data:', error);
-    return {
-      categories: [],
-      products: [],
-      featuredProduct: null,
-      trendingProducts: [],
-      bestSellers: [],
-      specialOffers: [],
       reviews: [],
     };
   }

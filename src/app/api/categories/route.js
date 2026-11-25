@@ -3,12 +3,17 @@ import { connectDB } from '@/lib/mongodb/mongoose';
 import Category from '@/models/Category';
 import Product from '@/models/Product';
 import { getSession } from '@/lib/auth/jwt';
+import { FALLBACK_CATEGORIES } from '@/lib/fallback-data';
+
 export async function GET() {
     try {
         await connectDB();
         const categories = await Category.find({ isActive: true })
             .sort({ displayOrder: 1, name: 1 })
             .lean();
+        if (!categories || categories.length === 0) {
+            return NextResponse.json({ categories: FALLBACK_CATEGORIES });
+        }
         // Attach product count to each category
         const categoriesWithCounts = await Promise.all(categories.map(async (cat) => {
             const productCount = await Product.countDocuments({
@@ -20,8 +25,8 @@ export async function GET() {
         return NextResponse.json({ categories: categoriesWithCounts });
     }
     catch (error) {
-        console.error('Error fetching categories:', error);
-        return NextResponse.json({ error: 'Failed to fetch categories' }, { status: 500 });
+        console.error('Error fetching categories from DB, returning fallback:', error.message);
+        return NextResponse.json({ categories: FALLBACK_CATEGORIES });
     }
 }
 export async function POST(req) {

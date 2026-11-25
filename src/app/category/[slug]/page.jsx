@@ -8,7 +8,12 @@ import { ProductCard3D } from '@/components/products/ProductCard3D';
 import AnimatedCardGallerySlider from '@/components/category/AnimatedCardGallerySlider';
 import WatchTryOnHeader from '@/components/category/WatchTryOnHeader';
 import DynamicLookbookHeader from '@/components/category/DynamicLookbookHeader';
-import ShirtFittingRoomHeader from '@/components/category/ShirtFittingRoomHeader';
+import {
+  FALLBACK_CATEGORIES,
+  FALLBACK_PRODUCTS,
+  getFallbackCategoryBySlug,
+  getFallbackProductsByCategory,
+} from '@/lib/fallback-data';
 import { Sparkles, ArrowLeft, PackageOpen } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -16,23 +21,32 @@ export const dynamic = 'force-dynamic';
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 export async function generateMetadata({ params }) {
-  await connectDB();
   const { slug } = await params;
 
   if (['shirts', 'slides'].includes(slug)) {
-    return { title: 'Collection Not Found' };
+    return { title: 'Collection Not Found | Vogue Atelier' };
   }
 
-  const category = await Category.findOne({ slug, isActive: true }).lean();
+  let category = null;
+  try {
+    await connectDB();
+    category = await Category.findOne({ slug, isActive: true }).lean();
+  } catch (err) {
+    // Fall back to static dataset for live deployments
+  }
 
   if (!category) {
-    return { title: 'Collection Not Found' };
+    category = getFallbackCategoryBySlug(slug);
   }
 
-  const title = `${category.name} | Botanical Collections`;
+  if (!category) {
+    return { title: 'Collection Not Found | Vogue Atelier' };
+  }
+
+  const title = `${category.name} | Vogue Atelier`;
   const description =
     category.description ||
-    `Explore handcrafted ${category.name} formulations made with organic botanicals. Available with Cash on Delivery across Pakistan.`;
+    `Explore handcrafted ${category.name} collection. Available with Cash on Delivery across Pakistan.`;
 
   return {
     title,
@@ -47,7 +61,7 @@ export async function generateMetadata({ params }) {
       type: 'website',
       images: [
         {
-          url: category.image || '/images/products/serum-main.jpg',
+          url: category.image || '/images/clothes/hero_clothes_magenta.jpg',
           width: 1200,
           height: 630,
           alt: category.name,
@@ -58,34 +72,50 @@ export async function generateMetadata({ params }) {
       card: 'summary_large_image',
       title,
       description,
-      images: [category.image || '/images/products/serum-main.jpg'],
+      images: [category.image || '/images/clothes/hero_clothes_magenta.jpg'],
     },
   };
 }
 
 export default async function CategoryPage({ params }) {
-  await connectDB();
   const { slug } = await params;
 
   if (['shirts', 'slides'].includes(slug)) {
     notFound();
   }
 
-  const categoryDoc = await Category.findOne({ slug, isActive: true }).lean();
-  if (!categoryDoc) {
+  let category = null;
+  let products = [];
+
+  try {
+    await connectDB();
+    const categoryDoc = await Category.findOne({ slug, isActive: true }).lean();
+    if (categoryDoc) {
+      category = JSON.parse(JSON.stringify(categoryDoc));
+      const productsDocs = await Product.find({
+        category: category._id,
+        status: 'published',
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+      products = JSON.parse(JSON.stringify(productsDocs || []));
+    }
+  } catch (err) {
+    console.error('CategoryPage DB fetch error, using fallbacks:', err.message);
+  }
+
+  // Resilient fallback for live / serverless deployments
+  if (!category) {
+    category = getFallbackCategoryBySlug(slug);
+  }
+
+  if (!category) {
     notFound();
   }
 
-  const category = JSON.parse(JSON.stringify(categoryDoc));
-
-  const productsDocs = await Product.find({
-    category: category._id,
-    status: 'published',
-  })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const products = JSON.parse(JSON.stringify(productsDocs));
+  if (!products || products.length === 0) {
+    products = getFallbackProductsByCategory(slug);
+  }
 
   const breadcrumbJsonLd = {
     '@context': 'https://schema.org',
