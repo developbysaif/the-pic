@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VirtualFit: Spatial Try-On</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ease: cubic-bezier(.2,.8,.2,1);
+  --sans: "Inter", system-ui, -apple-system, sans-serif;
+  --MH: min(78vh, 62vw);
+  --CW: 0px;
+  --room: url('https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080623_c94c85a3-23d5-4a0c-afff-41be1b5b8191.png&w=2400&q=85');
+  --model: url('https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080717_e02cb856-b812-4c9b-9b86-8a741c7f65eb.png&w=2688&q=85');
+  --garm: url('https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080719_f5a4cca2-cf42-4957-ab3b-ddec34d2b71a.png&w=2048&q=85');
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  background: #e9e4dc;
+  color: #fff;
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+@media (pointer: fine) {
+  html, body, button { cursor: none; }
+}
+
+/* ── Room background ── */
+.room {
+  position: fixed;
+  inset: -3%;
+  background: var(--room) center / cover no-repeat;
+  filter: blur(2.5px) saturate(1.05);
+  transform: scale(1.08);
+  z-index: 0;
+}
+.room::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(70% 60% at 50% 45%, rgba(255,252,246,.10), rgba(40,30,20,.16));
+}
+
+/* ── Ghost FIT ── */
+.ghost {
+  position: fixed;
+  left: 50%;
+  top: calc(50% - var(--MH) * .42);
+  transform: translateX(-50%);
+  z-index: 2;
+  font-size: calc(var(--MH) * .42);
+  font-weight: 900;
+  line-height: .8;
+  letter-spacing: -.04em;
+  color: rgba(255,255,255,.3);
+  -webkit-text-stroke: 1px rgba(255,255,255,.35);
+  text-shadow: 0 1px 0 rgba(255,255,255,.35);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.ghost span {
+  display: inline-block;
+  overflow: hidden;
+}
+
+/* ── Glass material ── */
+.glass {
+  background: linear-gradient(155deg, rgba(250,248,245,.30), rgba(150,144,136,.20) 48%, rgba(205,200,192,.24));
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid rgba(255,255,255,.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.7),
+    inset 0 -1px 0 rgba(255,255,255,.12),
+    0 20px 50px -24px rgba(40,30,20,.45);
+}
+
+/* ── Tab bar ── */
+.tabs {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 4.2vh;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  padding: 5px;
+  border-radius: 999px;
+  gap: 2px;
+}
+.tabs .pill {
+  position: absolute;
+  height: 38px;
+  background: rgba(255,255,255,.92);
+  border-radius: 999px;
+  box-shadow: 0 4px 14px -6px rgba(0,0,0,.3);
+  transition: transform .6s var(--ease), width .6s var(--ease);
+  pointer-events: none;
+  top: 5px;
+}
+.tabs button {
+  position: relative;
+  z-index: 1;
+  height: 38px;
+  padding: 0 22px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(30,30,32,.72);
+  border-radius: 999px;
+  transition: color .3s;
+  white-space: nowrap;
+}
+.tabs button.active { color: #111; font-weight: 600; }
+
+/* ── Tool rail ── */
+.rail {
+  position: fixed;
+  left: max(18px, 1.8vw);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  gap: 10px;
+  border-radius: 999px;
+}
+.rail button {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(30,30,32,.8);
+  transition: background .25s, color .25s;
+  position: relative;
+}
+.rail button.active {
+  background: rgba(255,255,255,.9);
+  color: #111;
+}
+.rail button:not(.active):hover {
+  background: rgba(255,255,255,.35);
+}
+.rail svg { width: 20px; height: 20px; }
+
+/* ── Stage ── */
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  touch-action: pan-y;
+  overflow: hidden;
+}
+.arc {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* ── Cards ── */
+.card {
+  position: absolute;
+  width: var(--CW);
+  height: calc(var(--CW) * 1.42);
+  border-radius: 22px;
+  overflow: hidden;
+  transform-origin: center bottom;
+  will-change: transform, opacity;
+}
+.card .g {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 5%;
+  height: 66%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  filter: drop-shadow(0 14px 14px rgba(40,30,20,.22));
+}
+.card .cname {
+  position: absolute;
+  bottom: 17%;
+  left: 0; right: 0;
+  text-align: center;
+  font-weight: 500;
+  font-size: calc(var(--CW) * .068);
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0,0,0,.18);
+  padding: 0 8px;
+}
+.card .cprice {
+  position: absolute;
+  bottom: 7%;
+  left: 0; right: 0;
+  text-align: center;
+  font-weight: 700;
+  font-size: calc(var(--CW) * .095);
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0,0,0,.18);
+}
+.card .sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.5) 50%, transparent 60%);
+  background-size: 300% 100%;
+  background-position: -100% 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.card:hover .sheen {
+  opacity: 1;
+  animation: sheen 1s ease forwards;
+}
+@keyframes sheen {
+  to { background-position: 200% 0; }
+}
+
+/* ── Model ── */
+.model {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  height: var(--MH);
+  aspect-ratio: 524 / 1360;
+  z-index: 50;
+  pointer-events: none;
+  overflow: hidden;
+}
+#mCur, #mNext {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+.model .grid {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0 5px, rgba(255,255,255,.22) 5px 6px);
+  mix-blend-mode: screen;
+  clip-path: inset(0 0 100% 0);
+  pointer-events: none;
+}
+.model .scan {
+  position: absolute;
+  left: -14%;
+  right: -14%;
+  height: 2px;
+  top: 0;
+  background: linear-gradient(90deg, transparent, #fff 18%, #fff 82%, transparent);
+  box-shadow: 0 0 18px 4px rgba(255,255,255,.75), 0 0 60px 10px rgba(190,225,255,.45);
+  pointer-events: none;
+  opacity: 0;
+}
+.model .scan::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  height: calc(var(--MH) * .12);
+  background: linear-gradient(to top, rgba(220,238,255,.32), transparent);
+  pointer-events: none;
+}
+
+/* ── Arrows ── */
+.arrow {
+  position: fixed;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  color: #222;
+}
+.arrow svg { width: 16px; height: 16px; }
+.arrow-left { left: calc(max(18px, 1.8vw) + 76px); }
+.arrow-right { right: max(18px, 1.8vw); }
+
+/* ── Buy card ── */
+.buy {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 4.6vh;
+  z-index: 60;
+  width: min(640px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 12px 22px 12px 12px;
+  border-radius: 24px;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0,0,0,.18);
+}
+.buy-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.3);
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+.buy-thumb .tg {
+  position: absolute;
+  inset: 6px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+.buy-info {
+  flex: 1;
+  min-width: 0;
+}
+.ln {
+  height: 1.15em;
+  overflow: hidden;
+  position: relative;
+}
+.ln span {
+  display: block;
+  position: absolute;
+  left: 0; right: 0;
+}
+.buy-name-txt { font-size: 16px; font-weight: 600; }
+.buy-price-txt { font-size: 14px; font-weight: 500; opacity: .9; }
+.buy-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+.buy-sizes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.buy-size-lbl {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: .85;
+  margin-right: 2px;
+}
+.size-chip {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.22);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .2s, color .2s, transform .1s;
+}
+.size-chip.active {
+  background: #fff;
+  color: #111;
+}
+.size-chip:active { transform: scale(.9); }
+.buy-colors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-lbl {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: .85;
+}
+.color-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: box-shadow .2s;
+}
+.color-dot.active {
+  box-shadow: 0 0 0 2px rgba(255,255,255,.95), 0 0 0 4px rgba(0,0,0,.12);
+}
+
+/* ── Custom cursor ── */
+.cur {
+  position: fixed;
+  z-index: 100;
+  width: 58px;
+  height: 58px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity .3s;
+}
+.cur-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,.95);
+  background: rgba(255,255,255,.14);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 6px 20px -8px rgba(0,0,0,.35);
+  transition: transform .5s var(--ease), background .5s var(--ease), border-color .5s var(--ease);
+}
+.cur-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  position: relative;
+  z-index: 1;
+  transition: transform .4s var(--ease), opacity .4s var(--ease);
+}
+.cur-label {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity .45s var(--ease), transform .45s var(--ease);
+  white-space: nowrap;
+}
+.cur-try { color: #111; }
+.cur-drag { color: #fff; }
+
+.cur.try .cur-ring {
+  transform: scale(1.5);
+  background: rgba(255,255,255,.92);
+}
+.cur.try .cur-dot { opacity: 0; transform: scale(0); }
+.cur.try .cur-try { opacity: 1; transform: scale(1); }
+
+.cur.drag .cur-ring { transform: scale(1.2); }
+.cur.drag .cur-drag { opacity: 1; transform: scale(1); }
+.cur.drag .cur-dot { opacity: 0; }
+
+.cur.btn .cur-ring { transform: scale(.6); }
+.cur.down .cur-ring { transform: scale(1.05); }
+
+/* ── Responsive ── */
+@media (max-width: 767px) {
+  :root { --MH: min(62vh, 128vw); }
+  .tabs {
+    padding: 4px;
+    overflow-x: auto;
+    max-width: calc(100vw - 24px);
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button {
+    height: 32px;
+    padding: 0 13px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .tabs .pill { height: 32px; }
+  .rail {
+    left: 10px;
+    top: auto;
+    bottom: calc(4.6vh + 150px);
+    transform: none;
+  }
+  .rail button { width: 34px; height: 34px; }
+  .arrow { display: none; }
+  .buy { flex-wrap: wrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .cur-ring, .cur-dot, .cur-label, .tabs .pill { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Room -->
+<div class="room"></div>
+
+<!-- Ghost FIT -->
+<div class="ghost" id="ghost">
+  <span>F</span><span>I</span><span>T</span>
+</div>
+
+<!-- Tab bar -->
+<nav class="tabs glass" id="tabs">
+  <div class="pill" id="pill"></div>
+  <button class="active" data-tab="0">Tops</button>
+  <button data-tab="1">Bottoms</button>
+  <button data-tab="2">Outerwear</button>
+  <button data-tab="3">Shoes</button>
+  <button data-tab="4">Accessories</button>
+</nav>
+
+<!-- Tool rail -->
+<div class="rail glass" id="rail">
+  <button class="active" aria-label="Clothing">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/>
+    </svg>
+  </button>
+  <button aria-label="Cart">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+    </svg>
+  </button>
+  <button aria-label="Calendar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  </button>
+  <button aria-label="Profile">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+  </button>
+</div>
+
+<!-- Stage -->
+<div class="stage" id="stage">
+  <div class="arc" id="arc"></div>
+</div>
+
+<!-- Model -->
+<div class="model" id="modelEl">
+  <img id="mCur" src="/images/shirt/shirt2.png" alt="" style="opacity:0">
+  <img id="mNext" alt="">
+  <div class="grid" id="mGrid"></div>
+  <div class="scan" id="mScan"></div>
+</div>
+
+<!-- Arrows -->
+<button class="arrow arrow-left glass" id="arrowL" aria-label="Previous">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+</button>
+<button class="arrow arrow-right glass" id="arrowR" aria-label="Next">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
+  </svg>
+</button>
+
+<!-- Buy card -->
+<div class="buy glass" id="buy">
+  <div class="buy-thumb" id="buyThumbWrap">
+    <div class="tg" id="buyThumb"></div>
+  </div>
+  <div class="buy-info">
+    <div class="ln" id="buyNameLn">
+      <span class="buy-name-txt" id="buyName">Basic T-shirt</span>
+    </div>
+    <div class="ln" id="buyPriceLn">
+      <span class="buy-price-txt" id="buyPrice">₹2,500</span>
+    </div>
+  </div>
+  <div class="buy-actions">
+    <div class="buy-sizes">
+      <span class="buy-size-lbl">Size</span>
+      <button class="size-chip" data-s="S">S</button>
+      <button class="size-chip active" data-s="M">M</button>
+      <button class="size-chip" data-s="L">L</button>
+      <button class="size-chip" data-s="XL">XL</button>
+    </div>
+    <div class="buy-colors">
+      <div class="ln" id="colorLnWrap" style="flex:1;min-width:0">
+        <span class="color-lbl" id="colorLbl">Color · White</span>
+      </div>
+      <div id="colorDots" style="display:flex;gap:6px;margin-left:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Cursor -->
+<div class="cur" id="cur">
+  <div class="cur-ring"></div>
+  <div class="cur-dot"></div>
+  <span class="cur-label cur-try">TRY ON</span>
+  <span class="cur-label cur-drag">DRAG</span>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const ITEMS = [
+  {n:"Shirt 1", p:2500, image:"/images/shirt/shirts.png",  model:"/images/shirt/shirt2.png",     c:[["White","#f4f2ee"],["Ash","#c9c7c2"],["Charcoal","#3b3c3f"],["Navy","#27324d"]]},
+  {n:"Shirt 2", p:2500, image:"/images/shirt/shirts1.png", model:"/images/shirt/shirt3.png",     c:[["White","#f6f4ef"],["Oat","#ddd3c2"],["Sage","#b9c2ae"],["Black","#1f1f21"]]},
+  {n:"Shirt 3", p:2500, image:"/images/shirt/shirts2.png", model:"/images/shirt/shirt4.png",     c:[["White","#f7f6f1"],["Sand","#d9ccb4"],["Sky","#bcd0e2"],["Olive","#717556"]]},
+  {n:"Shirt 4", p:2500, image:"/images/shirt/shirts3.png", model:"/images/shirt/shirt%201.png",  c:[["Heather","#a9a9a8"],["Bone","#e6e1d6"],["Forest","#33463a"],["Black","#1f1f21"]]},
+  {n:"Shirt 5", p:2500, image:"/images/shirt/shirts4.png", model:"/images/shirt/shirt7.png",     c:[["White / Black","#f4f2ee"],["Cream / Navy","#efe6d3"],["Grey / Red","#c9c7c2"],["White / Green","#e9efe8"]]},
+  {n:"Shirt 6", p:2500, image:"/images/shirt/shirts5.png", model:"/images/shirt/shirt6.png",     c:[["White","#f4f2ee"],["Ash","#c9c7c2"],["Charcoal","#3b3c3f"],["Navy","#27324d"]]},
+  {n:"Shirt 7", p:2500, image:"/images/shirt/shirts6.png", model:"/images/shirt/shirt8.png",     c:[["White","#f6f4ef"],["Oat","#ddd3c2"],["Sage","#b9c2ae"],["Black","#1f1f21"]]},
+  {n:"Shirt 8", p:2500, image:"/images/shirt/shirts7.png", model:"/images/shirt/shirt3.png",     c:[["White","#f7f6f1"],["Sand","#d9ccb4"],["Sky","#bcd0e2"],["Olive","#717556"]]},
+];
+const N = ITEMS.length * 2;
+
+// ── Responsive card width ──────────────────────────────────────────────────────
+function getCW() {
+  return window.innerWidth <= 767
+    ? Math.min(window.innerWidth * .30, 170)
+    : Math.min(window.innerWidth * .148, window.innerHeight * .33);
+}
+
+// ── XS table ──────────────────────────────────────────────────────────────────
+function getXS(W) {
+  if (window.innerWidth <= 767) {
+    return [0, .36, .5, .56, .6, .63, .65, .66, .67].map(v => v * W);
+  }
+  return [0, .215, .345, .432, .49, .52, .54, .55, .56].map(v => v * W);
+}
+function xAt(a, XS) {
+  const i = Math.min(Math.floor(a), XS.length - 2);
+  const f = a - i;
+  return XS[i] + (XS[i+1] - XS[i]) * f;
+}
+
+// ── Build cards ───────────────────────────────────────────────────────────────
+const arc = document.getElementById('arc');
+const cards = [];
+const seeds = [];
+for (let i = 0; i < N; i++) {
+  const item = ITEMS[i % ITEMS.length];
+  seeds.push(Math.random() * Math.PI * 2);
+  const el = document.createElement('div');
+  el.className = 'card glass';
+  el.innerHTML = `
+    <div class="g" style="background-image:url('${item.image}')"></div>
+    <div class="cname">${item.n}</div>
+    <div class="cprice">₹${item.p.toLocaleString('en-IN')}</div>
+    <div class="sheen"></div>
+  `;
+  arc.appendChild(el);
+  cards.push(el);
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let pos = 0, target = 0;
+let intro = 0;
+let dragging = false, dragStart = 0, dragPos0 = 0, dragT0 = 0, dragX0 = 0, dragVel = 0;
+let curOutfit = -1;
+let scanRunning = false;
+let scanAnims = [];
+let ptrX = window.innerWidth / 2, ptrY = window.innerHeight / 2;
+let curPX = ptrX, curPY = ptrY;
+let smoothSX = 0, smoothSY = 0;
+let curMode = ''; // 'try','drag','btn','down',''
+let wheelAcc = 0, lastWheelStep = 0;
+let prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ── Cursor ─────────────────────────────────────────────────────────────────────
+const curEl = document.getElementById('cur');
+const hasFinePntr = window.matchMedia('(pointer:fine)').matches;
+if (!hasFinePntr) curEl.style.display = 'none';
+
+function setCurMode(m) {
+  if (m === curMode) return;
+  curMode = m;
+  curEl.className = 'cur' + (m ? ' ' + m : '');
+}
+
+// ── Tab pill setup ─────────────────────────────────────────────────────────────
+const tabsEl = document.getElementById('tabs');
+const pillEl = document.getElementById('pill');
+const tabBtns = tabsEl.querySelectorAll('button');
+function updatePill(btn) {
+  const r = btn.getBoundingClientRect();
+  const tr = tabsEl.getBoundingClientRect();
+  pillEl.style.width = r.width + 'px';
+  pillEl.style.transform = `translateX(${r.left - tr.left - 5}px)`;
+}
+tabBtns.forEach((btn, idx) => {
+  btn.addEventListener('click', () => {
+    tabBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updatePill(btn);
+    target = Math.round(target / 5) * 5 + idx; // keep same but do full lap
+    target += 5;
+  });
+});
+// Init pill
+requestAnimationFrame(() => updatePill(tabBtns[0]));
+
+// ── Ghost letters ─────────────────────────────────────────────────────────────
+const ghostEl = document.getElementById('ghost');
+const ghostLetters = ghostEl.querySelectorAll('span');
+
+// ── Model ─────────────────────────────────────────────────────────────────────
+const mCur = document.getElementById('mCur');
+const mNext = document.getElementById('mNext');
+const mGrid = document.getElementById('mGrid');
+const mScan = document.getElementById('mScan');
+
+// ── Buy card ──────────────────────────────────────────────────────────────────
+const buyNameLn = document.getElementById('buyNameLn');
+const buyPriceLn = document.getElementById('buyPriceLn');
+const buyThumb = document.getElementById('buyThumb');
+const colorDots = document.getElementById('colorDots');
+let buyActiveColor = 0;
+let buyActiveSize = 'M';
+
+function rollText(lnEl, newTxt, cls) {
+  if (prefersReducedMotion) {
+    lnEl.querySelector('span').textContent = newTxt;
+    return;
+  }
+  const old = lnEl.querySelector('span');
+  const nw = document.createElement('span');
+  nw.className = old.className;
+  if (cls) nw.className = cls;
+  nw.textContent = newTxt;
+  nw.style.transform = 'translateY(110%)';
+  lnEl.appendChild(nw);
+  const dur = 620;
+  const ease = 'cubic-bezier(.2,.8,.2,1)';
+  old.animate([{transform:'translateY(0)'},{transform:'translateY(-110%)'}], {duration:dur, easing:ease, fill:'forwards'});
+  nw.animate([{transform:'translateY(110%)'},{transform:'translateY(0)'}], {duration:dur, easing:ease, fill:'forwards'});
+  setTimeout(() => { lnEl.innerHTML = ''; lnEl.appendChild(nw); nw.style.transform = ''; }, dur + 20);
+}
+
+function buildColorDots(item, activeIdx) {
+  colorDots.innerHTML = '';
+  item.c.forEach((col, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'color-dot' + (i === activeIdx ? ' active' : '');
+    dot.style.background = col[1];
+    dot.addEventListener('click', () => {
+      colorDots.querySelectorAll('.color-dot').forEach((d,j) => d.classList.toggle('active', j===i));
+      rollText(document.getElementById('colorLnWrap'), 'Color · ' + col[0], 'color-lbl');
+    });
+    colorDots.appendChild(dot);
+  });
+}
+
+function updateBuyCard(itemIdx) {
+  const item = ITEMS[itemIdx];
+  rollText(buyNameLn, item.n, 'buy-name-txt');
+  rollText(buyPriceLn, '₹' + item.p.toLocaleString('en-IN'), 'buy-price-txt');
+  rollText(document.getElementById('colorLnWrap'), 'Color · ' + item.c[0][0], 'color-lbl');
+  buildColorDots(item, 0);
+
+  // Thumbnail
+  buyThumb.style.backgroundImage = `url('${item.image}')`;
+  if (!prefersReducedMotion) {
+    buyThumb.animate([
+      {transform:'translateY(70%) scale(.8)', opacity:.6},
+      {transform:'translateY(0) scale(1)', opacity:1}
+    ], {duration:650, easing:'cubic-bezier(.2,.8,.2,1)', fill:'forwards'});
+  }
+}
+
+// Size chips
+document.querySelectorAll('.size-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.size-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+  });
+});
+
+// ── Try-on scan ───────────────────────────────────────────────────────────────
+function runTryOn(itemIdx) {
+  if (scanRunning) scanAnims.forEach(a => { try { a.cancel(); } catch(e){} });
+  scanAnims = [];
+  scanRunning = true;
+
+  updateBuyCard(itemIdx);
+
+  const item = ITEMS[itemIdx];
+  mNext.src = item.model;
+  mNext.alt = `${item.n} on model`;
+  mNext.style.clipPath = 'inset(0 0 100% 0)';
+  mNext.style.opacity = '1';
+
+  if (prefersReducedMotion) {
+    mCur.src = item.model;
+    mCur.alt = `${item.n} on model`;
+    mCur.style.opacity = '1';
+    mNext.style.clipPath = '';
+    mGrid.style.clipPath = 'inset(0 0 100% 0)';
+    mScan.style.opacity = '0';
+    scanRunning = false;
+    curOutfit = itemIdx;
+    return;
+  }
+
+  const ease = 'cubic-bezier(.65,0,.35,1)';
+  const dur = 950;
+
+  const a1 = mNext.animate([
+    {clipPath:'inset(0 0 100% 0)'},
+    {clipPath:'inset(0 0 0% 0)'}
+  ], {duration:dur, easing:ease, fill:'forwards'});
+
+  const a2 = mGrid.animate([
+    {clipPath:'inset(0 0 100% 0)'},
+    {clipPath:'inset(0 0 0 0)', offset:.5},
+    {clipPath:'inset(100% 0 0 0)'}
+  ], {duration:1092, easing:'linear', fill:'forwards'});
+
+  const a3 = mScan.animate([
+    {top:'0%', transform:'scaleX(.2)', opacity:0},
+    {top:'6%', transform:'scaleX(1)', opacity:1, offset:.08},
+    {top:'94%', offset:.92},
+    {top:'100%', transform:'scaleX(.2)', opacity:0}
+  ], {duration:dur, easing:ease, fill:'forwards'});
+
+  const a4 = mNext.animate([
+    {transform:'scale(1.012)'},
+    {transform:'scale(1)'}
+  ], {duration:1250, easing:'ease-out', fill:'forwards'});
+
+  scanAnims = [a1, a2, a3, a4];
+
+  a1.onfinish = () => {
+    mCur.src = item.model;
+    mCur.alt = `${item.n} on model`;
+    mCur.style.opacity = '1';
+    mNext.style.clipPath = 'inset(0 0 100% 0)';
+    scanAnims.forEach(a => { try { a.cancel(); } catch(e){} });
+    mGrid.style.clipPath = 'inset(0 0 100% 0)';
+    mScan.style.opacity = '0';
+    scanRunning = false;
+    curOutfit = itemIdx;
+  };
+}
+
+// ── Main animation loop ────────────────────────────────────────────────────────
+let t = 0;
+function loop(ts) {
+  t = ts * 0.001;
+
+  // Intro
+  if (!prefersReducedMotion) intro = Math.min(1, intro + .012);
+  else intro = 1;
+  const ie = 1 - Math.pow(1 - intro, 3);
+
+  // Spring
+  if (!dragging) {
+    if (prefersReducedMotion) pos = target;
+    else pos += (target - pos) * .11;
+  }
+
+  // Responsive values
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const CW = getCW();
+  document.documentElement.style.setProperty('--CW', CW + 'px');
+  const XS = getXS(W);
+
+  // Smooth pointer
+  smoothSX += (((ptrX / W) - .5) - smoothSX) * .06;
+  smoothSY += (((ptrY / H) - .5) - smoothSY) * .06;
+  const sx = smoothSX, sy = smoothSY;
+
+  // Room parallax
+  document.querySelector('.room').style.transform =
+    `translate3d(${-sx * 22}px, ${-sy * 14}px, 0) scale(${1.08 - .03 * ie})`;
+
+  // Ghost parallax + letter rise
+  ghostEl.style.transform = `translateX(calc(-50% + ${-sx * 40}px)) translateY(${-sy * 16}px)`;
+  ghostLetters.forEach((lt, i) => {
+    const rise = (1 - ie) * (60 + 30 * i);
+    lt.style.transform = `translateY(${rise}px)`;
+  });
+
+  // Cards
+  cards.forEach((card, i) => {
+    // u = mod(i − pos + 5, 10) − 5
+    let u = (((i - pos) % N) + N) % N;
+    if (u > N / 2) u -= N;
+    const a = Math.abs(u);
+    const sg = u < 0 ? -1 : u > 0 ? 1 : 0;
+
+    let x, s, zz, ry, blur = 0, opacity = 1;
+
+    if (a < 1) {
+      s = .55 + .45 * a;
+      zz = -260 * (1 - a);
+      opacity = a;
+      ry = -sg * 16 * a;
+    } else {
+      const aa = a - 1;
+      s = 1 / (1 + .3 * Math.pow(aa, 1.15));
+      zz = -110 * aa;
+      ry = -sg * (16 + 9 * Math.min(2, aa));
+      blur = Math.max(0, aa - 1.6) * 2.4;
+    }
+
+    if (a > 3.4) opacity *= 1 - (a - 3.4) / .8;
+
+    // Bob
+    const seed = seeds[i];
+    const bob = Math.sin(t * 1.1 + seed) * H * .006 * Math.min(1, a);
+    const y = bob - (1 - s) * H * .04;
+
+    // Pointer tilt
+    ry += sx * 10;
+    const rx = -sy * 6;
+
+    x = sg * xAt(a, XS) * ie;
+    const finalS = s * (.6 + .4 * ie);
+    const finalO = opacity * ie;
+
+    card.style.opacity = finalO < .01 ? '0' : finalO.toString();
+    card.style.visibility = finalO < .01 ? 'hidden' : 'visible';
+    card.style.transform =
+      `translate(calc(${x}px - 50%), calc(${y}px - 50%)) perspective(1300px) translateZ(${zz}px) rotateY(${ry}deg) rotateX(${rx}deg) scale(${finalS})`;
+    card.style.filter = blur > 0 ? `blur(${blur.toFixed(2)}px)` : '';
+
+    if (a < 1) {
+      card.style.zIndex = '1';
+    } else {
+      card.style.zIndex = Math.round(100 - 10 * a).toString();
+    }
+  });
+
+  // Cursor
+  if (hasFinePntr) {
+    curPX += (ptrX - curPX) * .22;
+    curPY += (ptrY - curPY) * .22;
+    curEl.style.left = curPX + 'px';
+    curEl.style.top = curPY + 'px';
+  }
+
+  // Settle → try-on
+  if (!dragging && Math.abs(target - pos) < .02 && !scanRunning) {
+    const outfit = ((Math.round(target) % ITEMS.length) + ITEMS.length) % ITEMS.length;
+    if (outfit !== curOutfit) runTryOn(outfit);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ── Pointer / drag ────────────────────────────────────────────────────────────
+const stage = document.getElementById('stage');
+
+document.addEventListener('pointermove', e => {
+  ptrX = e.clientX;
+  ptrY = e.clientY;
+
+  // Cursor mode: check what's under pointer
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (!dragging) {
+    if (el && (el.closest('.card') || el.classList.contains('card'))) setCurMode('try');
+    else if (el && (el.closest('button') || el.tagName === 'BUTTON')) setCurMode('btn');
+    else if (el && el.closest('.stage')) setCurMode('drag');
+    else setCurMode('');
+  }
+
+  if (!dragging) return;
+  const dx = e.clientX - dragStart;
+  const now = performance.now();
+  dragVel = (e.clientX - dragX0) / (now - dragT0 + 1);
+  dragX0 = e.clientX;
+  dragT0 = now;
+  const XS = getXS(window.innerWidth);
+  pos = dragPos0 - dx / XS[1];
+});
+
+stage.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  dragging = true;
+  dragStart = e.clientX;
+  dragX0 = e.clientX;
+  dragT0 = performance.now();
+  dragPos0 = pos;
+  dragVel = 0;
+  setCurMode('drag');
+  stage.setPointerCapture(e.pointerId);
+});
+
+stage.addEventListener('pointerup', e => {
+  if (!dragging) return;
+  const moved = Math.abs(e.clientX - dragStart);
+  dragging = false;
+
+  if (moved < 6) {
+    // Click: find which card was clicked
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const card = el && el.closest('.card');
+    if (card) {
+      const i = cards.indexOf(card);
+      if (i >= 0) {
+        // Find the offset u
+        let u = ((i - pos % N) % N + N) % N;
+        if (u > N / 2) u -= N;
+        target = Math.round(pos + u);
+        runTryOn(i % ITEMS.length);
+      }
+    }
+  } else {
+    target = Math.round(pos - dragVel * 3.2);
+  }
+  setCurMode('');
+});
+
+stage.addEventListener('pointercancel', () => { dragging = false; });
+
+// ── Wheel ─────────────────────────────────────────────────────────────────────
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  wheelAcc += delta;
+  const now = performance.now();
+  if (Math.abs(wheelAcc) > 60 && now - lastWheelStep > 260) {
+    target += Math.sign(wheelAcc);
+    wheelAcc = 0;
+    lastWheelStep = now;
+  }
+}, { passive: false });
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') target--;
+  if (e.key === 'ArrowRight') target++;
+});
+
+// ── Arrow buttons ─────────────────────────────────────────────────────────────
+document.getElementById('arrowL').addEventListener('click', () => target--);
+document.getElementById('arrowR').addEventListener('click', () => target++);
+
+// ── Hover on interactive buttons ──────────────────────────────────────────────
+document.querySelectorAll('button, .color-dot, .size-chip').forEach(el => {
+  el.addEventListener('pointerenter', () => setCurMode('btn'));
+  el.addEventListener('pointerleave', () => setCurMode(''));
+});
+document.addEventListener('pointerdown', () => { if (curMode !== 'drag') setCurMode('down'); });
+document.addEventListener('pointerup', () => { if (curMode === 'down') setCurMode(''); });
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+// Set initial CW
+const initCW = getCW();
+document.documentElement.style.setProperty('--CW', initCW + 'px');
+
+// Set model initial figure (blank, then first try-on reveals it)
+mCur.style.opacity = '0';
+
+// Kick off initial try-on after short delay
+setTimeout(() => { runTryOn(0); }, 200);
+
+// Update pill on resize
+window.addEventListener('resize', () => {
+  const active = tabsEl.querySelector('button.active');
+  if (active) updatePill(active);
+});
+
+// Start loop
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
